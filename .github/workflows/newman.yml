@@ -7,14 +7,78 @@ on:
     paths:
       - 'collections/petstore-collection.json'
       - '.github/workflows/newman.yml'
+  schedule:
+    - cron: '0 7 * * 1' # Mondays at 07:00 UTC
   workflow_dispatch:
+    inputs:
+      jira_gate:
+        description: 'Run the Jira Ready for QA gate before Newman'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
+  jira-gate:
+    name: Check Jira Ready for QA issues
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.jira_gate) }}
+    runs-on: ubuntu-latest
+    outputs:
+      ready_issue_count: ${{ steps.query-jira.outputs.ready_issue_count }}
+    steps:
+      - name: Validate Jira credentials
+        env:
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        run: |
+          if [ -z "$JIRA_EMAIL" ] || [ -z "$JIRA_API_TOKEN" ]; then
+            echo "::error::JIRA_EMAIL and/or JIRA_API_TOKEN GitHub Actions secrets are missing."
+            exit 1
+          fi
+
+      - name: Verify Jira authentication
+        env:
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        run: |
+          response=$(curl --fail --silent --show-error \
+            --user "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+            --header "Accept: application/json" \
+            "https://lizapysarenko.atlassian.net/rest/api/3/myself")
+          account_id=$(printf '%s' "$response" | python3 -c "import json,sys; print(json.load(sys.stdin).get('accountId',''))")
+          if [ -z "$account_id" ]; then
+            echo "::error::Jira authentication response did not contain an accountId."
+            exit 1
+          fi
+          echo "Authenticated with Jira successfully (account ID verified)."
+
+      - name: Find issues ready for QA
+        id: query-jira
+        env:
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        run: |
+          response=$(curl --fail --silent --show-error \
+            --user "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+            --request POST \
+            --header "Accept: application/json" \
+            --header "Content-Type: application/json" \
+            --data '{"jql":"project = SHOP AND labels = \"api-testing\" AND status = \"Ready for QA\"","maxResults":100,"fields":["key","summary","status"]}' \
+            "https://lizapysarenko.atlassian.net/rest/api/3/search/jql")
+          count=$(printf '%s' "$response" | python3 -c "import json,sys; print(len(json.load(sys.stdin).get('issues', [])))")
+          echo "ready_issue_count=$count" >> "$GITHUB_OUTPUT"
+          echo "Jira issues in Ready for QA with label api-testing: $count"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::Jira gate blocked: no SHOP issues with label api-testing are in Ready for QA."
+            exit 1
+          fi
+
   newman:
     name: Run Petstore API regression
+    needs: [jira-gate]
+    if: ${{ always() && (needs.jira-gate.result == 'success' || needs.jira-gate.result == 'skipped') }}
     runs-on: ubuntu-latest
     outputs:
       report_exists: ${{ steps.run-newman.outputs.report_exists }}
