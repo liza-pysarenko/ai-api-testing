@@ -35,9 +35,9 @@ jobs:
         run: |
           mkdir -p results reports
           set +e
-          newman run collections/petstore-collection.json \
-            --reporters cli,json,htmlextra \
-            --reporter-json-export results/newman-report.json \
+          newman run collections/petstore-collection.json \\
+            --reporters cli,json,htmlextra \\
+            --reporter-json-export results/newman-report.json \\
             --reporter-htmlextra-export reports/index.html
           newman_exit_code=$?
           if [ -s reports/index.html ]; then
@@ -81,7 +81,12 @@ jobs:
       - name: Download Newman HTML report
         uses: actions/download-artifact@v4
         with:
-          name: github-pages
+          name: newman-html-report
+          path: reports
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
           path: reports
 
       - name: Deploy to GitHub Pages
