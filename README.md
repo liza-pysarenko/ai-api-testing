@@ -32,8 +32,9 @@ The collection uses the `baseUrl` collection variable and generates a unique pet
 Requirements: Node.js 20 or later and npm.
 
 ```bash
-npm install --global newman@6
-newman run collections/petstore-collection.json --reporters cli,json --reporter-json-export results/newman-report.json
+npm install --global newman@6 newman-reporter-htmlextra
+mkdir -p results reports
+newman run collections/petstore-collection.json --reporters cli,json,htmlextra --reporter-json-export results/newman-report.json --reporter-htmlextra-export reports/index.html
 ```
 
 ## GitHub Actions
@@ -42,12 +43,21 @@ The workflow `.github/workflows/newman.yml`:
 
 - Runs on pushes to `main` when the collection or workflow changes.
 - Supports manual execution through **Actions → API regression (Newman) → Run workflow**.
-- Uses Node.js 20 and Newman 6.
-- Uploads the Newman JSON report as the `newman-json-report` artifact, including when assertions fail (provided Newman produces the report).
+- Uses Node.js 20, Newman 6, and `newman-reporter-htmlextra`.
+- Uploads machine-readable JSON and HTML reports as separate workflow artifacts.
+- Publishes the HTML report to GitHub Pages whenever the Newman HTML report was generated, including when test assertions fail.
+
+### Enable GitHub Pages
+
+Before the first Pages deployment, open **Settings → Pages** in this repository and set **Build and deployment → Source** to **GitHub Actions**. The publishing job uses `actions/configure-pages`, `actions/upload-pages-artifact`, and `actions/deploy-pages`.
+
+After a successful deployment, the report will be available at:
+
+`https://liza-pysarenko.github.io/ai-api-testing/`
 
 ## Repository structure
 
 - `collections/` — Postman collections
 - `results/` — generated machine-readable run results
-- `reports/` — generated reports
+- `reports/` — generated HTML reports
 - `.github/workflows/` — GitHub Actions workflows
