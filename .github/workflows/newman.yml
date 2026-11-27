@@ -16,6 +16,8 @@ jobs:
   newman:
     name: Run Petstore API regression
     runs-on: ubuntu-latest
+    outputs:
+      report_exists: ${{ steps.run-newman.outputs.report_exists }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,16 +27,25 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install Newman 6
-        run: npm install --global newman@6
+      - name: Install Newman and HTML extra reporter
+        run: npm install --global newman@6 newman-reporter-htmlextra
 
       - name: Run Postman collection
         id: run-newman
         run: |
-          mkdir -p results
+          mkdir -p results reports
+          set +e
           newman run collections/petstore-collection.json \
-            --reporters cli,json \
-            --reporter-json-export results/newman-report.json
+            --reporters cli,json,htmlextra \
+            --reporter-json-export results/newman-report.json \
+            --reporter-htmlextra-export reports/index.html
+          newman_exit_code=$?
+          if [ -s reports/index.html ]; then
+            echo "report_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "report_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          exit "$newman_exit_code"
 
       - name: Upload Newman JSON report
         if: always()
@@ -44,3 +55,43 @@ jobs:
           path: results/newman-report.json
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Upload Newman HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newman-html-report
+          path: reports/index.html
+          if-no-files-found: warn
+          retention-days: 14
+
+  publish-report:
+    name: Publish HTML report to GitHub Pages
+    needs: newman
+    if: always() && needs.newman.outputs.report_exists == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download Newman HTML report
+        uses: actions/download-artifact@v4
+        with:
+          name: newman-html-report
+          path: reports
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: reports
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
