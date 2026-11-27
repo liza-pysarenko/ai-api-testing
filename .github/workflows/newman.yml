@@ -35,9 +35,9 @@ jobs:
         run: |
           mkdir -p results reports
           set +e
-          newman run collections/petstore-collection.json \\
-            --reporters cli,json,htmlextra \\
-            --reporter-json-export results/newman-report.json \\
+          newman run collections/petstore-collection.json \
+            --reporters cli,json,htmlextra \
+            --reporter-json-export results/newman-report.json \
             --reporter-htmlextra-export reports/index.html
           newman_exit_code=$?
           if [ -s reports/index.html ]; then
