@@ -1,0 +1,46 @@
+name: API regression (Newman)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'collections/petstore-collection.json'
+      - '.github/workflows/newman.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  newman:
+    name: Run Petstore API regression
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Newman 6
+        run: npm install --global newman@6
+
+      - name: Run Postman collection
+        id: run-newman
+        run: |
+          mkdir -p results
+          newman run collections/petstore-collection.json \
+            --reporters cli,json \
+            --reporter-json-export results/newman-report.json
+
+      - name: Upload Newman JSON report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newman-json-report
+          path: results/newman-report.json
+          if-no-files-found: warn
+          retention-days: 14
