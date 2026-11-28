@@ -65,7 +65,7 @@ jobs:
             --request POST \
             --header "Accept: application/json" \
             --header "Content-Type: application/json" \
-            --data '{"jql":"project = SHOP AND labels = \\"api-testing\\" AND status = \\"Ready for QA\\"","maxResults":100,"fields":["key","summary","status"]}' \
+            --data '{"jql":"project = SHOP AND labels = \"api-testing\" AND status = \"Ready for QA\"","maxResults":100,"fields":["key","summary","status"]}' \
             "https://lizapysarenko.atlassian.net/rest/api/3/search/jql")
           count=$(printf '%s' "$response" | python3 -c "import json,sys; print(len(json.load(sys.stdin).get('issues', [])))")
           echo "ready_issue_count=$count" >> "$GITHUB_OUTPUT"
